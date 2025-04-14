@@ -1,0 +1,6 @@
+body { font-family: sans-serif; margin: 2rem; }
+form { margin: 1rem 0; }
+input { margin-right: 0.5rem; padding: 0.4rem; }
+button { padding: 0.4rem 0.8rem; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+td, th { border: 1px solid #aaa; padding: 0.5rem; text-align: left; }
