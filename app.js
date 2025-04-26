@@ -4,17 +4,32 @@ const bcrypt = require('bcrypt');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const db = require('./db');
-
+require('dotenv').config(); // Make sure you have dotenv installed and a .env file
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 
+// app.use(session({
+//   secret: 'supersecretkey',
+//   resave: false,
+//   saveUninitialized: false
+// }));
+
+
+
 app.use(session({
-  secret: 'supersecretkey',
+  secret: process.env.SESSION_SECRET,
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production' && process.env.FORCE_HTTPS === 'true',
+    sameSite: 'strict',
+    maxAge: 1000 * 60 * 60
+  }
 }));
+
 
 // Auth middleware
 const requireAuth = (req, res, next) => {
