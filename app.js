@@ -88,6 +88,10 @@ app.post('/add', (req, res) => {
     return res.status(400).send('Invalid Quantity! Item Quantity Cannot Be Less Than 0!');
   }
 
+  if ( quantity > 999999999) {
+    return res.status(400).send('Invalid Input! Item Quantity cannot exceed 999999999!');
+  }
+
   // Check for duplicate based on name, location, and supplier
   db.get(
     `SELECT * FROM inventory 
@@ -123,6 +127,9 @@ app.post('/update/:id', (req, res) => {
   // Validate quantity
   if (isNaN(quantity) || quantity < 0) {
     return res.status(400).send('Invalid Input! Item Quantity cannot be less than 0!');
+  }
+  if ( quantity > 999999999) {
+    return res.status(400).send('Invalid Input! Item Quantity cannot exceed 999999999!');
   }
 
   // const { quantity } = req.body;
