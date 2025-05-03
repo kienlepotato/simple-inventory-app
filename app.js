@@ -67,16 +67,49 @@ app.get('/', (req, res) => {
     res.render('index', { items: rows, user: req.session.user });
   });
 });
-
+//ADD ITEM
+// app.post('/add', (req, res) => {
+//   if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
+//   const { name, quantity, location, supplier } = req.body;
+//   db.run(
+//     `INSERT INTO inventory (name, quantity, location, supplier) VALUES (?, ?, ?, ?)`,
+//     [name, quantity, location, supplier],
+//     () => res.redirect('/')
+//   );
+// });
 app.post('/add', (req, res) => {
   if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
+
   const { name, quantity, location, supplier } = req.body;
-  db.run(
-    `INSERT INTO inventory (name, quantity, location, supplier) VALUES (?, ?, ?, ?)`,
-    [name, quantity, location, supplier],
-    () => res.redirect('/')
+  const parsedQuantity = parseInt(quantity, 10);
+
+  // Validate quantity
+  if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+    return res.status(400).send('Invalid Quantity! Item Quantity Cannot Be Less Than 0!');
+  }
+
+  // Check for duplicate based on name, location, and supplier
+  db.get(
+    `SELECT * FROM inventory 
+     WHERE LOWER(name) = LOWER(?) AND LOWER(location) = LOWER(?) AND LOWER(supplier) = LOWER(?)`,
+    [name, location, supplier],
+    (err, row) => {
+      if (err) return res.status(500).send('Database error');
+      if (row) return res.status(409).send('Item with this name, location, and supplier already exists');
+
+      // If valid and not duplicate, insert the item
+      db.run(
+        `INSERT INTO inventory (name, quantity, location, supplier) VALUES (?, ?, ?, ?)`,
+        [name, parsedQuantity, location, supplier],
+        (err) => {
+          if (err) return res.status(500).send('Error adding item');
+          res.redirect('/');
+        }
+      );
+    }
   );
 });
+
 
 app.post('/delete/:id', (req, res) => {
   if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
@@ -85,7 +118,14 @@ app.post('/delete/:id', (req, res) => {
 
 app.post('/update/:id', (req, res) => {
   if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
-  const { quantity } = req.body;
+  let quantity = parseInt(req.body.quantity, 10);
+
+  // Validate quantity
+  if (isNaN(quantity) || quantity < 0) {
+    return res.status(400).send('Invalid Input! Item Quantity cannot be less than 0!');
+  }
+
+  // const { quantity } = req.body;
   db.run(`UPDATE inventory SET quantity = ? WHERE id = ?`, [quantity, req.params.id], () => res.redirect('/'));
 });
 
