@@ -10,13 +10,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 
-// app.use(session({
-//   secret: 'supersecretkey',
-//   resave: false,
-//   saveUninitialized: false
-// }));
-
-
 
 app.use(session({
   secret: process.env.SESSION_SECRET,
@@ -67,16 +60,8 @@ app.get('/', (req, res) => {
     res.render('index', { items: rows, user: req.session.user });
   });
 });
-//ADD ITEM
-// app.post('/add', (req, res) => {
-//   if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
-//   const { name, quantity, location, supplier } = req.body;
-//   db.run(
-//     `INSERT INTO inventory (name, quantity, location, supplier) VALUES (?, ?, ?, ?)`,
-//     [name, quantity, location, supplier],
-//     () => res.redirect('/')
-//   );
-// });
+
+
 app.post('/add', (req, res) => {
   if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
 
