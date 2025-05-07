@@ -46,6 +46,17 @@ app.post('/login', (req, res) => {
   });
 });
 
+function requireRole(role) {
+  return (req, res, next) => {
+    if (!req.session.user || req.session.user.role !== role) {
+      return res.status(403).send('Forbidden');
+    }
+    next();
+  };
+}
+
+
+
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
@@ -62,8 +73,8 @@ app.get('/', (req, res) => {
 });
 
 
-app.post('/add', (req, res) => {
-  if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
+app.post('/add', requireRole('admin'), (req, res) => {
+  // if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
 
   const { name, quantity, location, supplier } = req.body;
   const parsedQuantity = parseInt(quantity, 10);
@@ -100,13 +111,13 @@ app.post('/add', (req, res) => {
 });
 
 
-app.post('/delete/:id', (req, res) => {
-  if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
+app.post('/delete/:id',  requireRole('admin'), (req, res) => {
+  // if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
   db.run(`DELETE FROM inventory WHERE id = ?`, [req.params.id], () => res.redirect('/'));
 });
 
-app.post('/update/:id', (req, res) => {
-  if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
+app.post('/update/:id',  requireRole('admin'), (req, res) => {
+  // if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
   let quantity = parseInt(req.body.quantity, 10);
 
   // Validate quantity
