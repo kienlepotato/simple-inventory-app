@@ -8,7 +8,6 @@
   <h1>Inventory</h1>
   <p>Logged in as <strong><%= user.name %></strong> (<%= user.role %>) | <a href="/logout">Sign out</a></p>
 
-  <% if (user.role === 'admin') { %>
     <form action="/add" method="POST">
       <input name="name" placeholder="Item name" required>
       <input name="quantity" type="number" placeholder="Quantity" required>
@@ -16,7 +15,7 @@
       <input name="supplier" placeholder="Supplier" required>
       <button type="submit">Add Item</button>
     </form>
-  <% } %>
+ 
 
   <table border="1">
     <tr><th>Name</th><th>Quantity</th><th>Location</th><th>Supplier</th><th>Actions</th></tr>
@@ -27,7 +26,7 @@
         <td><%= item.location %></td>
         <td><%= item.supplier %></td>
         <td>
-          <% if (user.role === 'admin') { %>
+         
             <form action="/delete/<%= item.id %>" method="POST" style="display:inline;">
               <button type="submit">Delete</button>
             </form>
@@ -35,9 +34,7 @@
               <input type="number" name="quantity" value="<%= item.quantity %>" style="width:60px;" required>
               <button type="submit">Update</button>
             </form>
-          <% } else { %>
-            <em>View only</em>
-          <% } %>
+        
         </td>
       </tr>
     <% }) %>
