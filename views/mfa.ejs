@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MFA Verification</title>
+  <link rel="stylesheet" href="/loginstyle.css">
+</head>
+<body>
+  <h2>Multi-Factor Authentication</h2>
+  <% if (error) { %>
+    <p style="color:red"><%= error %></p>
+  <% } %>
+  <form action="/mfa" method="POST">
+    <input name="code" placeholder="Enter 6-digit code" required>
+    <button type="submit">Verify</button>
+  </form>
+</body>
+</html>

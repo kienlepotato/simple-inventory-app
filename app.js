@@ -4,6 +4,11 @@ const bcrypt = require('bcrypt');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const db = require('./db');
+
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
+
 require('dotenv').config(); // Make sure you have dotenv installed and a .env file
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -23,10 +28,20 @@ app.use(session({
   }
 }));
 
+const cookieParser = require('cookie-parser');
+app.use(cookieParser(process.env.COOKIE_SECRET)); // Add a secret in your .env
+
 
 // Auth middleware
 const requireAuth = (req, res, next) => {
   if (!req.session.user) return res.redirect('/login');
+  if (req.session.user.login != "login") return res.redirect('/login')
+  next();
+};
+
+const requireAuthForMFA = (req, res, next) => {
+  if (!req.session.user) return res.redirect('/login');
+  if (req.session.user.login != "mfa") return res.redirect('/')
   next();
 };
 
@@ -36,15 +51,163 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
+
   db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
     if (err) throw err;
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-      return res.render('login', { error: 'Invalid credentials' });
+    
+    // Check if account is locked due to too many failed login attempts
+    if (user.login_lock_until && Date.now() < user.login_lock_until) {
+      return res.render('login', { error: 'Too many login attempts. Please wait 30 seconds.' });
     }
-    req.session.user = { id: user.id, name: user.username, role: user.role };
-    res.redirect('/');
+
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      // Track failed login attempts
+      const failedLogins = user.failed_logins + 1;
+
+      // Lock account if 5 failed attempts
+      let lockUntil = user.login_lock_until;
+      if (failedLogins >= 5) {
+        lockUntil = Date.now() + 30000; // Lock for 30 seconds
+      }
+
+      db.run(`UPDATE users SET failed_logins = ?, login_lock_until = ? WHERE id = ?`, [failedLogins, lockUntil, user.id], (err) => {
+        if (err) throw err;
+        
+        const errorMsg = failedLogins >= 5 
+          ? 'Too many attempts. Please wait 30 seconds.' 
+          : 'Invalid credentials';
+        
+        return res.render('login', { error: errorMsg });
+      });
+    } else {
+      // Reset failed login attempts on successful login
+      db.run(`UPDATE users SET failed_logins = 0, login_lock_until = 0 WHERE id = ?`, [user.id], (err) => {
+        if (err) throw err;
+        const deviceToken = req.signedCookies.trusted_device;
+        if (deviceToken) {
+          db.get(`SELECT * FROM trusted_devices WHERE user_id = ? AND device_token = ?`, [user.id, deviceToken], (err, trustedDevice) => {
+            if (err) throw err;
+
+            if (trustedDevice) {
+              // Device is trusted — skip MFA
+              req.session.user = { id: user.id, name: user.username, role: user.role, login: "login" };
+              return res.redirect('/');
+            } else {
+              // Not trusted — go to MFA
+              req.session.user = { id: user.id, name: user.username, role: user.role, login: "mfa" };
+              return res.redirect('/mfa');
+            }
+          });
+        } else {
+          req.session.user = { id: user.id, name: user.username, role: user.role, login: "mfa"};
+          res.redirect('/mfa');
+        }
+      });
+    }
   });
 });
+
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+app.get('/mfa', requireAuthForMFA, (req, res) => {
+  // Generate 6-digit code
+  const code = crypto.randomInt(100000, 999999).toString();
+
+  // Save it in session
+  req.session.mfaCode = code;
+
+  // Render the MFA page immediately
+  res.render('mfa', { error: null });
+
+  // Now send the email in the background
+  db.get(`SELECT email FROM users WHERE id = ?`, [req.session.user.id], (err, row) => {
+    if (err || !row) {
+      console.error('Could not fetch user email');
+      return;
+    }
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: row.email,
+      subject: 'Your MFA Code for PFS Assignment',
+      text: `Your authentication code is: ${code}\n\nDo not share this code with anyone.\n\n\nIf you did not attempt to login, I would suggest changing your password as soon as possible.`
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error('Failed to send email', error);
+      } else {
+        console.log('Email sent: ' + info.response);
+      }
+    });
+  });
+});
+
+app.post('/mfa', requireAuthForMFA, (req, res) => {
+  const { code } = req.body;
+
+  // Get the user data from the database
+  db.get(`SELECT * FROM users WHERE id = ?`, [req.session.user.id], (err, user) => {
+    if (err) throw err;
+
+    // Check if account is locked due to too many failed MFA attempts
+    if (user.mfa_lock_until && Date.now() < user.mfa_lock_until) { // crazy bit manip
+      return res.render('mfa', { error: 'Too many attempts. Please wait 30 seconds.' });
+    }
+
+    // No code? Redirect to login
+    if (!req.session.mfaCode) {
+      return res.redirect('/login');
+    }
+
+    // Check if the submitted MFA code is correct
+    if (code === req.session.mfaCode) {
+      // Success — reset MFA attempts
+      db.run(`UPDATE users SET mfa_attempts = 0, mfa_lock_until = 0 WHERE id = ?`, [user.id], (err) => {
+        if (err) throw err;
+    
+        // Check if user opted to remember this device (e.g. via a checkbox in the form)
+        // if (req.body.remember_device) {
+          const deviceToken = require('crypto').randomBytes(32).toString('hex');
+          const createdAt = Date.now();
+    
+          // Store in DB
+          db.run(`INSERT INTO trusted_devices (user_id, device_token, created_at) VALUES (?, ?, ?)`, 
+            [user.id, deviceToken, createdAt], (err) => {
+              if (err) throw err;
+    
+              // Set signed, HTTP-only cookie for 30 days
+              res.cookie('trusted_device', deviceToken, {
+                maxAge: 30 * 24 * 60 * 60 * 1000,
+                httpOnly: true,
+                signed: true,
+                sameSite: 'strict'
+              });
+              req.session.user.login = "login"
+              delete req.session.mfaCode;
+              return res.redirect('/');
+          });
+        // } else {
+        //   req.session.user.login = "login"
+        //   delete req.session.mfaCode;
+        //   return res.redirect('/');
+        // }
+      });
+    }
+    
+  });
+});
+
+
+
+// app.post()
 
 function requireRole(role) {
   return (req, res, next) => {
