@@ -172,7 +172,14 @@ app.post('/mfa', requireAuthForMFA, (req, res) => {
       // Success — reset MFA attempts
       db.run(`UPDATE users SET mfa_attempts = 0, mfa_lock_until = 0 WHERE id = ?`, [user.id], (err) => {
         if (err) throw err;
-    
+        
+        if (!req.body.remember_device) {
+
+              req.session.user.login = "login"
+              delete req.session.mfaCode;
+              return res.redirect('/');
+        }
+
         // Check if user opted to remember this device (e.g. via a checkbox in the form)
         // if (req.body.remember_device) {
           const deviceToken = require('crypto').randomBytes(32).toString('hex');
@@ -205,7 +212,92 @@ app.post('/mfa', requireAuthForMFA, (req, res) => {
   });
 });
 
+app.get('/forgot-password', (req, res) => {
+  const deviceToken = req.signedCookies.trusted_device;
 
+  if (!deviceToken) {
+    return res.status(403).send('Password reset only available on trusted devices.');
+  }
+
+  // If trusted device, show form to enter username to request reset
+  res.render('forgot-password', { error: null });
+});
+
+app.post('/forgot-password', (req, res) => {
+  const { username } = req.body;
+  const deviceToken = req.signedCookies.trusted_device;
+
+  if (!deviceToken) {
+    return res.status(403).send('Password reset only available on trusted devices.');
+  }
+
+  db.get(`SELECT * FROM users WHERE username = ?`, [username], (err, user) => {
+    if (err) throw err;
+    if (!user) {
+      return res.render('forgot-password', { error: 'No user found with that username' });
+    }
+
+    // Generate a code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Send email
+    // const transporter = nodemailer.createTransport({
+    //   service: 'gmail',
+    //   auth: {
+    //     user: process.env.EMAIL_ADDRESS,
+    //     pass: process.env.EMAIL_PASSWORD
+    //   }
+    // });
+
+    const mailOptions = {
+      from: process.env.EMAIL_ADDRESS,
+      to: user.email,
+      subject: 'Password Reset Code',
+      text: `Your password reset code is: ${resetCode}\n\nNever share this code with someone else.\n\n\nIf you did not request this it means someone tried to reset your password from your device.`
+    };
+
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Failed to send email');
+      }
+
+      // Save code in session
+      req.session.resetCode = resetCode;
+      req.session.resetUser = { id: user.id, username: user.username };
+
+      res.redirect('/reset-password');
+    });
+  });
+});
+
+app.get('/reset-password', (req, res) => {
+  res.render('reset-password', { error: null });
+});
+
+app.post('/reset-password', async (req, res) => {
+  const { code, newPassword } = req.body;
+
+  if (!req.session.resetCode || !req.session.resetUser) {
+    return res.status(403).send('Reset session expired. Start over.');
+  }
+
+  if (code !== req.session.resetCode) {
+    return res.render('reset-password', { error: 'Invalid code.' });
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  db.run(`UPDATE users SET password_hash = ? WHERE id = ?`, [hashedPassword, req.session.resetUser.id], (err) => {
+    if (err) throw err;
+
+    // Clear reset session data
+    delete req.session.resetCode;
+    delete req.session.resetUser;
+
+    res.redirect('/login');
+  });
+});
 
 // app.post()
 
