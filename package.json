@@ -14,6 +14,24 @@
     "express": "^4.18.2",
     "express-session": "^1.17.3",
     "nodemailer": "^7.0.3",
+    "pkg": "^5.8.1",
     "sqlite3": "^5.1.6"
+  },
+  "pkg": {
+    "scripts": [
+      "server.js"
+    ],
+    "assets": [
+      "views/**/*",
+      "public/**/*",
+      ".env"
+    ],
+    "targets": [
+      "node20-win-x64"
+    ],
+    "outputPath": "dist",
+    "dependencies": [
+      "ejs"
+    ]
   }
 }
