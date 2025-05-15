@@ -55,7 +55,12 @@ app.post('/login', (req, res) => {
 
   db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
     if (err) throw err;
-    
+    if (!user) {
+
+      const errorMsg = 'Invalid credentials';
+
+      return res.render('login', { error: errorMsg });
+    }
     // Check if account is locked due to too many failed login attempts
     if (user.login_lock_until && Date.now() < user.login_lock_until) {
       return res.render('login', { error: 'Too many login attempts. Please wait 30 seconds.' });
@@ -73,11 +78,11 @@ app.post('/login', (req, res) => {
 
       db.run(`UPDATE users SET failed_logins = ?, login_lock_until = ? WHERE id = ?`, [failedLogins, lockUntil, user.id], (err) => {
         if (err) throw err;
-        
-        const errorMsg = failedLogins >= 5 
-          ? 'Too many attempts. Please wait 30 seconds.' 
+
+        const errorMsg = failedLogins >= 5
+          ? 'Too many attempts. Please wait 30 seconds.'
           : 'Invalid credentials';
-        
+
         return res.render('login', { error: errorMsg });
       });
     } else {
@@ -100,7 +105,7 @@ app.post('/login', (req, res) => {
             }
           });
         } else {
-          req.session.user = { id: user.id, name: user.username, role: user.role, login: "mfa"};
+          req.session.user = { id: user.id, name: user.username, role: user.role, login: "mfa" };
           res.redirect('/mfa');
         }
       });
@@ -173,34 +178,34 @@ app.post('/mfa', requireAuthForMFA, (req, res) => {
       // Success — reset MFA attempts
       db.run(`UPDATE users SET mfa_attempts = 0, mfa_lock_until = 0 WHERE id = ?`, [user.id], (err) => {
         if (err) throw err;
-        
+
         if (!req.body.remember_device) {
 
-              req.session.user.login = "login"
-              delete req.session.mfaCode;
-              return res.redirect('/');
+          req.session.user.login = "login"
+          delete req.session.mfaCode;
+          return res.redirect('/');
         }
 
         // Check if user opted to remember this device (e.g. via a checkbox in the form)
         // if (req.body.remember_device) {
-          const deviceToken = require('crypto').randomBytes(32).toString('hex');
-          const createdAt = Date.now();
-    
-          // Store in DB
-          db.run(`INSERT INTO trusted_devices (user_id, device_token, created_at) VALUES (?, ?, ?)`, 
-            [user.id, deviceToken, createdAt], (err) => {
-              if (err) throw err;
-    
-              // Set signed, HTTP-only cookie for 30 days
-              res.cookie('trusted_device', deviceToken, {
-                maxAge: 30 * 24 * 60 * 60 * 1000,
-                httpOnly: true,
-                signed: true,
-                sameSite: 'strict'
-              });
-              req.session.user.login = "login"
-              delete req.session.mfaCode;
-              return res.redirect('/');
+        const deviceToken = require('crypto').randomBytes(32).toString('hex');
+        const createdAt = Date.now();
+
+        // Store in DB
+        db.run(`INSERT INTO trusted_devices (user_id, device_token, created_at) VALUES (?, ?, ?)`,
+          [user.id, deviceToken, createdAt], (err) => {
+            if (err) throw err;
+
+            // Set signed, HTTP-only cookie for 30 days
+            res.cookie('trusted_device', deviceToken, {
+              maxAge: 30 * 24 * 60 * 60 * 1000,
+              httpOnly: true,
+              signed: true,
+              sameSite: 'strict'
+            });
+            req.session.user.login = "login"
+            delete req.session.mfaCode;
+            return res.redirect('/');
           });
         // } else {
         //   req.session.user.login = "login"
@@ -209,7 +214,7 @@ app.post('/mfa', requireAuthForMFA, (req, res) => {
         // }
       });
     }
-    
+
   });
 });
 
@@ -340,7 +345,7 @@ app.post('/add', requireRole('admin'), (req, res) => {
     return res.status(400).send('Invalid Quantity! Item Quantity Cannot Be Less Than 0!');
   }
 
-  if ( quantity > 999999999) {
+  if (quantity > 999999999) {
     return res.status(400).send('Invalid Input! Item Quantity cannot exceed 999999999!');
   }
 
@@ -367,12 +372,12 @@ app.post('/add', requireRole('admin'), (req, res) => {
 });
 
 
-app.post('/delete/:id',  requireRole('admin'), (req, res) => {
+app.post('/delete/:id', requireRole('admin'), (req, res) => {
   // if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
   db.run(`DELETE FROM inventory WHERE id = ?`, [req.params.id], () => res.redirect('/'));
 });
 
-app.post('/update/:id',  requireRole('admin'), (req, res) => {
+app.post('/update/:id', requireRole('admin'), (req, res) => {
   // if (req.session.user.role !== 'admin') return res.status(403).send('Forbidden');
   let quantity = parseInt(req.body.quantity, 10);
 
@@ -380,7 +385,7 @@ app.post('/update/:id',  requireRole('admin'), (req, res) => {
   if (isNaN(quantity) || quantity < 0) {
     return res.status(400).send('Invalid Input! Item Quantity cannot be less than 0!');
   }
-  if ( quantity > 999999999) {
+  if (quantity > 999999999) {
     return res.status(400).send('Invalid Input! Item Quantity cannot exceed 999999999!');
   }
 
