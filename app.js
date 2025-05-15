@@ -235,7 +235,7 @@ app.post('/mfa', requireAuthForMFA, (req, res) => {
 
             const mailOptions = {
               from: process.env.EMAIL_USER,
-              to: row.email,
+              to: user.email,
               subject: 'Failed log in attempts to your account',
               text: `A user has failed to log into your account. If you have not attempted to log in, please change your password immediately!`
             };
