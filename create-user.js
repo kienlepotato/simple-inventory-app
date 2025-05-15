@@ -13,10 +13,10 @@ const db = new sqlite3.Database('./inventory.db');
 // const email = 'safjfvbh@gmail.com';
 
 
-const username = 'kienle';
-const password = 'Passw0rd!';
+const username = 'parakh';
+const password = 'parakh';
 const role = 'admin';
-const email = 'kien.leaus+shelf@gmail.com';
+const email = 'parakhdayal@gmail.com';
 
 bcrypt.hash(password, 10).then(hash => {
   db.run(`INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)`,
@@ -25,4 +25,18 @@ bcrypt.hash(password, 10).then(hash => {
       console.log('User created');
       db.close();
     });
+  const userid = 2;
+  // db.run(
+  //   `DELETE FROM trusted_devices WHERE user_id = ?`,
+  //   [userid],
+  //   function (err) {
+  //     if (err) {
+  //       console.error('Error deleting trusted devices:', err.message);
+  //     } else {
+  //       console.log(`Deleted trusted devices for user ID ${userid}`);
+  //     }
+  //     db.close();
+  //   }
+  // );
 });
+

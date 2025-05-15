@@ -33,6 +33,18 @@ const cookieParser = require('cookie-parser');
 app.use(cookieParser(process.env.COOKIE_SECRET)); // Add a secret in your .env
 
 
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
+
+
 // Auth middleware
 const requireAuth = (req, res, next) => {
   if (!req.session.user) return res.redirect('/login');
@@ -56,7 +68,7 @@ app.post('/login', (req, res) => {
   db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
     if (err) throw err;
     if (!user) {
-
+      // commebt
       const errorMsg = 'Invalid credentials';
 
       return res.render('login', { error: errorMsg });
@@ -111,15 +123,6 @@ app.post('/login', (req, res) => {
       });
     }
   });
-});
-
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
 });
 
 app.get('/mfa', requireAuthForMFA, (req, res) => {
@@ -213,6 +216,40 @@ app.post('/mfa', requireAuthForMFA, (req, res) => {
         //   return res.redirect('/');
         // }
       });
+    } else {
+      // Incorrect code — increment attempts
+      const newAttempts = user.mfa_attempts + 1;
+      let lockUntil = 0;
+
+      if (newAttempts >= 5) { // or however many attempts you want to allow
+        lockUntil = Date.now() + (30 * 1000); // lock for 30 seconds
+      }
+
+      db.run(`UPDATE users SET mfa_attempts = ?, mfa_lock_until = ? WHERE id = ?`,
+        [newAttempts, lockUntil, user.id], (err) => {
+          if (err) throw err;
+
+          let errorMsg = 'Invalid code. Please try again.';
+          if (lockUntil) {
+            errorMsg = 'Too many attempts. Please wait 30 seconds.';
+
+            const mailOptions = {
+              from: process.env.EMAIL_USER,
+              to: row.email,
+              subject: 'Failed log in attempts to your account',
+              text: `A user has failed to log into your account. If you have not attempted to log in, please change your password immediately!`
+            };
+
+            transporter.sendMail(mailOptions, (error, info) => {
+              if (error) {
+                console.error('Failed to send email', error);
+              } else {
+                console.log('Email sent: ' + info.response);
+              }
+            });
+          }
+          return res.render('mfa', { error: errorMsg });
+        });
     }
 
   });
