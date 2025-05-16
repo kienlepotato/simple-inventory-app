@@ -1,5 +1,5 @@
 const fs = require('fs');
-const db = require('./db'); // your existing db.js file
+const db = require('./db');
 
 const inventoryData = JSON.parse(fs.readFileSync('inventory-data.json', 'utf8'));
 

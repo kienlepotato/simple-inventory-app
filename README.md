@@ -15,8 +15,3 @@ User Login:
 username:user
 password: userpass
 email: safjfvbh@gmail.com
-
-
-Part of this code was created with the assistance of Generative AI.
-
-OpenAI. (2025). ChatGPT (May 16 version) [Large language model]. https://chat.openai.com/chat
